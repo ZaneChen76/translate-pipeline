@@ -1,0 +1,38 @@
+# Sensitive data
+*.env
+.env.*
+data/inbox/*
+data/output/*
+data/jobs/*
+data/tm/*
+data/glossary/*
+!data/inbox/.gitkeep
+!data/output/.gitkeep
+!data/jobs/.gitkeep
+!data/tm/.gitkeep
+!data/glossary/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config (may contain secrets)
+*.local.yaml
+*.local.json
+config.local.*
