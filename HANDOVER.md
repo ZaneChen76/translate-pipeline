@@ -426,6 +426,66 @@ git push origin main
 
 ---
 
+## 七.5、OpenClaw Agent 调用方式
+
+### ⚠️ 重要：必须使用 Subagent 模式
+
+当从 OpenClaw agent 触发翻译时，**不要在主 session 直接执行**，必须使用 `sessions_spawn`：
+
+```python
+sessions_spawn(
+    task="""你是翻译执行器。任务：翻译 Drive translate/in/ 中下一个未翻译的文件。
+
+步骤：
+1. 用 exec background=true 运行：
+   cd ~/.openclaw/workspace/projects/translate-docs/translate_pipeline && HUNYUAN_API_KEY="HUNYUAN_API_KEY_REMOVED" python3 drive_translate.py
+
+2. 用 process poll 轮询等待完成（timeout 1800000ms）
+
+3. 读取输出，返回完整结果摘要""",
+    mode="run",
+    runTimeoutSeconds=2400,  # 40 分钟
+    label="translate-doc",
+)
+```
+
+### 为什么必须用 Subagent
+
+| 方案 | 主 agent 阻塞 | exec 超时风险 | 用户体验 |
+|------|--------------|--------------|---------|
+| 直接 exec | ✅ 阻塞 30 分钟 | ❌ 10 分钟被杀 | ❌ 无法交互 |
+| subagent + background exec | ✅ 立即解放 | ✅ 进程独立运行 | ✅ 可继续操作 |
+
+**关键发现**（2026-03-15 实测）：
+- subagent 的 `runTimeoutSeconds` 超时只关闭回报通道
+- `background exec` 进程继续独立运行不受影响
+- 翻译结果通过 `status.json` + Drive 持久化，可随时查询
+
+### Timeout 设置
+
+```
+runTimeoutSeconds=2400      # subagent 存活 40 分钟
+process poll timeout=1800000 # 翻译进程最长 30 分钟
+```
+
+**覆盖范围**：
+- 小文档（600 单元）：~10 分钟
+- 大文档（1863 单元）：~30 分钟
+- buffer：10 分钟给 QA + 上传
+
+### 触发后响应模板
+
+```
+🚀 翻译任务已启动
+📋 文件: {filename}
+⏱ 预计: {estimated_time}
+📁 输出: translate/out/{filename}.en.docx
+
+完成后自动回报结果，你可以继续其他操作。
+```
+
+---
+
 ## 八、关键设计决策记录
 
 1. **使用 gog CLI 而非 Google API SDK**：避免 API 密钥管理，复用现有 OAuth 认证
@@ -434,6 +494,8 @@ git push origin main
 4. **checkpoint 每 5 单元**：权衡性能和安全性，5 单元约 15 秒工作量
 5. **SIGTERM 转 KeyboardInterrupt**：复用现有异常处理逻辑，减少重复代码
 6. **双输出格式**：JSON 供自动化消费，摘要供人工阅读
+7. **Subagent 模式调用**：主 agent spawn 独立 session 执行翻译，不阻塞主 session
+8. **`mode="run"` 而非 `mode="session"`**：翻译是批处理无多轮交互，持久化浪费资源
 
 ---
 
