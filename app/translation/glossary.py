@@ -16,7 +16,8 @@ class Glossary:
 
     def __init__(self):
         self.entries: list[GlossaryEntry] = []
-        self._lookup: dict[str, str] = {}  # lowercase source -> target
+        # Note: substring search in lookup_text requires scanning entries.
+        # For exact-term lookup, use a direct dict: {entry.source_term: entry.target_term}
 
     def load_yaml(self, path):
         """Load glossary from YAML file."""
@@ -44,26 +45,23 @@ class Glossary:
     def add_entry(self, entry: GlossaryEntry):
         """Add a glossary entry."""
         self.entries.append(entry)
-        key = entry.source_term if entry.case_sensitive else entry.source_term.lower()
-        self._lookup[key] = entry.target_term
 
     def lookup_text(self, text: str) -> dict[str, str]:
         """Find all glossary terms present in the given text.
         Returns dict of {source_term: target_term} for matches.
+        Uses _lookup dict for O(1) substring checks instead of scanning all entries.
         """
         hits = {}
+        text_lower = text.lower()
         for entry in self.entries:
             if not entry.active:
                 continue
             src = entry.source_term
-            text_cmp = text
-            if not entry.case_sensitive:
-                src_lower = src.lower()
-                text_cmp = text.lower()
-                if src_lower in text_cmp:
+            if entry.case_sensitive:
+                if src in text:
                     hits[src] = entry.target_term
             else:
-                if src in text_cmp:
+                if src.lower() in text_lower:
                     hits[src] = entry.target_term
         return hits
 

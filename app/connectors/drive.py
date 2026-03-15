@@ -123,6 +123,9 @@ class DriveConnector:
     def save_status(self, status: dict) -> bool:
         """Save the unified status.json to Drive in/ folder.
         
+        Upload new version first, then delete old — ensures the file is always
+        available (no gap where status.json is missing).
+        
         Args:
             status: dict of {filename: status_record}
         """
@@ -142,11 +145,7 @@ class DriveConnector:
         with open(local_path, "w") as f:
             json.dump(status, f, ensure_ascii=False, indent=2)
         
-        if existing_id:
-            # Delete old version first (gog doesn't have update-in-place)
-            _run_gog(["delete", existing_id, "--force"])
-        
-        # Upload new version
+        # Upload new version FIRST (before deleting old) to avoid gap
         rc, stdout, stderr = _run_gog(
             ["upload", str(local_path), "--parent", self.in_folder_id, "--plain"],
             timeout=60,
@@ -154,6 +153,10 @@ class DriveConnector:
         if rc != 0:
             log.error(f"Failed to upload status.json: {stderr}")
             return False
+        
+        # Delete old version after successful upload
+        if existing_id:
+            _run_gog(["delete", existing_id, "--force"])
         
         log.info(f"Status.json updated ({len(status)} entries)")
         return True

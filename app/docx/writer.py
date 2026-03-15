@@ -1,16 +1,20 @@
 from __future__ import annotations
 """DOCX writer - writes translated text back into the document structure."""
 
+import re
 import shutil
 from pathlib import Path
-from typing import Optional
 
 from docx import Document
-from docx.document import Document as DocumentType
-from docx.table import Table
 
 from ..core import TranslationUnit, UnitPart
 from ..core.config import log
+
+# Path patterns matching extractor.py
+_HEADER_RE = re.compile(r"^header\[s(\d+)\]/p\[(\d+)\]$")
+_FOOTER_RE = re.compile(r"^footer\[s(\d+)\]/p\[(\d+)\]$")
+_BODY_RE = re.compile(r"^body/p\[(\d+)\]$")
+_TABLE_RE = re.compile(r"^table\[(\d+)\]/cell\[(\d+),(\d+)\]$")
 
 
 class DocxWriter:
@@ -19,12 +23,13 @@ class DocxWriter:
     def __init__(self, source_path: str, units: list[TranslationUnit]):
         self.source_path = Path(source_path)
         self.units = units
-        self.unit_map = {u.unit_id: u for u in units}
 
     def write(self, output_path: str) -> str:
-        """
-        Write translated content to a new DOCX file.
+        """Write translated content to a new DOCX file.
         Returns the output file path.
+
+        Uses path-based mapping (not position counting) to avoid misalignment
+        when the document contains empty paragraphs or structural gaps.
         """
         output = Path(output_path)
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -35,57 +40,105 @@ class DocxWriter:
         # Open the copy and replace text
         doc = Document(str(output))
 
-        # Build path -> translation mapping
-        body_units = [u for u in self.units if u.part == UnitPart.BODY.value]
-        table_units = [u for u in self.units if u.part == UnitPart.TABLE.value]
+        written = 0
+        skipped = 0
 
-        # Write body paragraphs
-        body_idx = 0
-        for idx, para in enumerate(doc.paragraphs):
-            if para.text.strip():
-                # Find matching unit by position
-                if body_idx < len(body_units):
-                    unit = body_units[body_idx]
-                    if unit.translated_text and not unit.error:
-                        self._replace_paragraph_text(para, unit.translated_text)
-                    body_idx += 1
+        for unit in self.units:
+            if not unit.translated_text or unit.error:
+                continue
 
-        # Write table cells
-        table_cell_idx = 0
-        for table in doc.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    if cell.text.strip():
-                        if table_cell_idx < len(table_units):
-                            unit = table_units[table_cell_idx]
-                            if unit.translated_text and not unit.error:
-                                self._replace_cell_text(cell, unit.translated_text)
-                            table_cell_idx += 1
+            m = _BODY_RE.match(unit.path)
+            if m:
+                idx = int(m.group(1))
+                if idx < len(doc.paragraphs):
+                    self._replace_paragraph_text(doc.paragraphs[idx], unit.translated_text)
+                    written += 1
+                else:
+                    log.warning(f"Paragraph index {idx} out of range (path={unit.path})")
+                    skipped += 1
+                continue
+
+            m = _HEADER_RE.match(unit.path)
+            if m:
+                s_idx, p_idx = int(m.group(1)), int(m.group(2))
+                if s_idx < len(doc.sections):
+                    paras = doc.sections[s_idx].header.paragraphs
+                    if p_idx < len(paras):
+                        self._replace_paragraph_text(paras[p_idx], unit.translated_text)
+                        written += 1
+                    else:
+                        log.warning(f"Header para index {p_idx} out of range (path={unit.path})")
+                        skipped += 1
+                else:
+                    log.warning(f"Section index {s_idx} out of range (path={unit.path})")
+                    skipped += 1
+                continue
+
+            m = _FOOTER_RE.match(unit.path)
+            if m:
+                s_idx, p_idx = int(m.group(1)), int(m.group(2))
+                if s_idx < len(doc.sections):
+                    paras = doc.sections[s_idx].footer.paragraphs
+                    if p_idx < len(paras):
+                        self._replace_paragraph_text(paras[p_idx], unit.translated_text)
+                        written += 1
+                    else:
+                        log.warning(f"Footer para index {p_idx} out of range (path={unit.path})")
+                        skipped += 1
+                else:
+                    log.warning(f"Section index {s_idx} out of range (path={unit.path})")
+                    skipped += 1
+                continue
+
+            m = _TABLE_RE.match(unit.path)
+            if m:
+                t_idx, r_idx, c_idx = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                if t_idx < len(doc.tables):
+                    table = doc.tables[t_idx]
+                    if r_idx < len(table.rows) and c_idx < len(table.rows[r_idx].cells):
+                        self._replace_cell_text(table.rows[r_idx].cells[c_idx], unit.translated_text)
+                        written += 1
+                    else:
+                        log.warning(f"Table cell index [{r_idx},{c_idx}] out of range (path={unit.path})")
+                        skipped += 1
+                else:
+                    log.warning(f"Table index {t_idx} out of range (path={unit.path})")
+                    skipped += 1
+                continue
+
+            log.warning(f"Unrecognized path format: {unit.path}")
+            skipped += 1
 
         doc.save(str(output))
-        log.info(f"Written output to: {output.name}")
+        log.info(f"Written output to: {output.name} ({written} units written, {skipped} skipped)")
         return str(output)
 
     def _replace_paragraph_text(self, para, new_text: str):
-        """Replace paragraph text while trying to preserve run structure."""
+        """Replace paragraph text, preserving the first run's formatting (font, size, bold, etc.).
+
+        Per-word formatting is necessarily lost since translated text has different
+        word boundaries than the source. This is an acceptable tradeoff for translation.
+        """
         if not para.runs:
             para.text = new_text
             return
 
-        # Strategy: clear all runs, put full text in first run, clear rest
+        # Keep first run (preserves <w:rPr> formatting), replace its text
         first_run = para.runs[0]
         first_run.text = new_text
+
+        # Remove remaining runs from XML (not just clear text — removes the run elements)
         for run in para.runs[1:]:
-            run.text = ""
+            run._element.getparent().remove(run._element)
 
     def _replace_cell_text(self, cell, new_text: str):
-        """Replace table cell text."""
+        """Replace table cell text, preserving first run's formatting."""
         for para in cell.paragraphs:
             if para.runs:
-                para.runs[0].text = new_text
+                first_run = para.runs[0]
+                first_run.text = new_text
                 for run in para.runs[1:]:
-                    run.text = ""
+                    run._element.getparent().remove(run._element)
                 return
-        # No runs, set paragraph text directly
         if cell.paragraphs:
             cell.paragraphs[0].text = new_text

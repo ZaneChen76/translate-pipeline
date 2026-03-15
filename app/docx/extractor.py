@@ -37,6 +37,19 @@ class DocxExtractor:
         log.info(f"  Paragraphs: {len(self.doc.paragraphs)}")
         log.info(f"  Tables: {len(self.doc.tables)}")
 
+        # Extract headers
+        for s_idx, section in enumerate(self.doc.sections):
+            header = section.header
+            if header:
+                for p_idx, para in enumerate(header.paragraphs):
+                    if para.text.strip():
+                        self.units.append(self._make_unit(
+                            part=UnitPart.HEADER,
+                            path=f"header[s{s_idx}]/p[{p_idx}]",
+                            text=para.text,
+                            style_name=para.style.name if para.style else None,
+                        ))
+
         # Extract body paragraphs
         for idx, para in enumerate(self.doc.paragraphs):
             if para.text.strip():
@@ -61,7 +74,20 @@ class DocxExtractor:
                         )
                         self.units.append(unit)
 
-        # Add context (preceding N paragraphs)
+        # Extract footers
+        for s_idx, section in enumerate(self.doc.sections):
+            footer = section.footer
+            if footer:
+                for p_idx, para in enumerate(footer.paragraphs):
+                    if para.text.strip():
+                        self.units.append(self._make_unit(
+                            part=UnitPart.FOOTER,
+                            path=f"footer[s{s_idx}]/p[{p_idx}]",
+                            text=para.text,
+                            style_name=para.style.name if para.style else None,
+                        ))
+
+        # Add context (preceding/following unit)
         for i, unit in enumerate(self.units):
             if i > 0:
                 unit.context_before = self.units[i - 1].source_text[:200]

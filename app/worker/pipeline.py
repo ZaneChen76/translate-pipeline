@@ -94,6 +94,7 @@ class Pipeline:
 
             # Load TM
             self.tm.load()
+            log.info(f"TM loaded: {self.tm.size} entries")
 
             # Initialize translator
             self.translator = create_translator(self.config)

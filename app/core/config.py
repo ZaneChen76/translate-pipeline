@@ -30,9 +30,6 @@ class Config:
     top_p: float = 0.9
     translation_timeout: int = 120  # seconds, per API call
 
-    # Context
-    context_window: int = 2  # number of preceding paragraphs as context
-
     # QA
     qa_enabled: bool = True
 

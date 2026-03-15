@@ -101,35 +101,7 @@ class NumberChecker:
 
 
 class TermChecker:
-    """Checks terminology consistency across all units."""
-
-    def __init__(self):
-        self.term_usage: dict[str, set[str]] = {}  # source_term -> set of translations used
-
-    def check_all(self, units: list[TranslationUnit]) -> list[QaIssue]:
-        """Check terminology consistency across all units."""
-        self.term_usage.clear()
-        issues = []
-
-        # Collect all term translations
-        for unit in units:
-            if not unit.translated_text or unit.error:
-                continue
-            for src_term, tgt_term in (unit.term_hits or []):
-                if isinstance(unit.term_hits, list):
-                    # term_hits is a list of source terms that matched glossary
-                    pass
-
-        # Check from glossary hits
-        glossary_hits: dict[str, set[str]] = {}
-        for unit in units:
-            if not unit.translated_text or unit.error:
-                continue
-            # Check if the unit had glossary context (tracked via term_hits)
-            # For now, scan for known multi-translation patterns
-            pass
-
-        return issues
+    """Checks terminology consistency for a single unit against glossary."""
 
     def check_unit(self, unit: TranslationUnit, glossary: dict) -> list[QaIssue]:
         """Check a single unit against glossary."""
