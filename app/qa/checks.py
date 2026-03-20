@@ -38,9 +38,9 @@ class StructureChecker:
         target_stats = target_stats or {}
 
         # Paragraph count
-        src_para = source_stats.get("paragraphs", 0)
-        tgt_para = target_stats.get("paragraphs", 0)
-        if tgt_para and src_para != tgt_para:
+        src_para = source_stats.get("paragraphs")
+        tgt_para = target_stats.get("paragraphs")
+        if src_para is not None and tgt_para is not None and src_para != tgt_para:
             issues.append(QaIssue(
                 severity="error",
                 category="structure",
@@ -48,13 +48,23 @@ class StructureChecker:
             ))
 
         # Table count
-        src_tables = source_stats.get("tables", 0)
-        tgt_tables = target_stats.get("tables", 0)
-        if tgt_tables and src_tables != tgt_tables:
+        src_tables = source_stats.get("tables")
+        tgt_tables = target_stats.get("tables")
+        if src_tables is not None and tgt_tables is not None and src_tables != tgt_tables:
             issues.append(QaIssue(
                 severity="error",
                 category="structure",
                 detail=f"Table count mismatch: source={src_tables}, target={tgt_tables}",
+            ))
+
+        # Table cell count
+        src_cells = source_stats.get("table_cells")
+        tgt_cells = target_stats.get("table_cells")
+        if src_cells is not None and tgt_cells is not None and src_cells != tgt_cells:
+            issues.append(QaIssue(
+                severity="error",
+                category="structure",
+                detail=f"Table cell count mismatch: source={src_cells}, target={tgt_cells}",
             ))
 
         # Unit count

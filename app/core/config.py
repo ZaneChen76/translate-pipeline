@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Optional
 
@@ -34,6 +34,18 @@ class Config:
     qa_enabled: bool = True
 
     def __post_init__(self):
+        # Normalize YAML-loaded string paths
+        if isinstance(self.data_dir, str):
+            self.data_dir = Path(self.data_dir)
+        if isinstance(self.glossary_dir, str):
+            self.glossary_dir = Path(self.glossary_dir)
+        if isinstance(self.tm_dir, str):
+            self.tm_dir = Path(self.tm_dir)
+        if isinstance(self.output_dir, str):
+            self.output_dir = Path(self.output_dir)
+        if isinstance(self.jobs_dir, str):
+            self.jobs_dir = Path(self.jobs_dir)
+
         if self.glossary_dir is None:
             self.glossary_dir = self.data_dir / "glossary"
         if self.tm_dir is None:
@@ -55,7 +67,8 @@ class Config:
     def from_yaml(cls, path: str) -> "Config":
         with open(path) as f:
             data = yaml.safe_load(f) or {}
-        return cls(**{k: v for k, v in data.items() if hasattr(cls, k)})
+        allowed = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in allowed})
 
 
 def setup_logging(verbose: bool = False) -> logging.Logger:

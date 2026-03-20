@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 
 from .core.config import Config, setup_logging, log
+from .qa.dashboard import generate_quality_dashboard
+from .qa.dashboard_image import render_dashboard_image
 from .worker.pipeline import Pipeline
 
 
@@ -63,6 +65,37 @@ def cmd_translate(args):
     return 0
 
 
+def cmd_quality_report(args):
+    source_path = args.source
+    targets = args.targets or []
+    report_path = args.report or ""
+
+    report_or_text, metrics = generate_quality_dashboard(
+        source_path=source_path,
+        target_patterns=targets,
+        output_dir=args.output_dir,
+        report_path=report_path,
+        glossary_path=args.glossary or "",
+    )
+
+    if report_path:
+        print(f"Dashboard Report: {report_or_text}")
+    else:
+        print(report_or_text)
+
+    if metrics:
+        winner = sorted(metrics, key=lambda m: m.overall, reverse=True)[0]
+        print(
+            f"Best Candidate: {winner.name} | overall={winner.overall:.2f} | "
+            f"accuracy={winner.accuracy:.2f} | structure={winner.structure_fidelity:.2f}"
+        )
+
+    if args.image:
+        image_path = render_dashboard_image(source_path, metrics, args.image)
+        print(f"Dashboard Image: {image_path}")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="translate_pipeline",
@@ -83,6 +116,27 @@ def main():
     p_trans.add_argument("--no-resume", action="store_true", help="Disable checkpoint resume (start fresh)")
     p_trans.add_argument("--verbose", "-v", action="store_true", help="Verbose logging")
 
+    p_quality = subparsers.add_parser(
+        "quality-report",
+        help="Generate visual quality dashboard for one source and one/multiple targets",
+    )
+    p_quality.add_argument("--source", "-s", required=True, help="Source .docx path")
+    p_quality.add_argument(
+        "--targets",
+        "-t",
+        nargs="*",
+        help="Target .docx paths or glob patterns (e.g. data/output/tdra03.en.*.docx)",
+    )
+    p_quality.add_argument(
+        "--output-dir",
+        default="data/output",
+        help="Output directory for auto target discovery when --targets is omitted",
+    )
+    p_quality.add_argument("--glossary", "-g", help="Glossary YAML file")
+    p_quality.add_argument("--report", "-r", help="Write dashboard to markdown file")
+    p_quality.add_argument("--image", help="Write dashboard to PNG image")
+    p_quality.add_argument("--verbose", "-v", action="store_true", help="Verbose logging")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -94,6 +148,8 @@ def main():
 
     if args.command == "translate":
         return cmd_translate(args)
+    if args.command == "quality-report":
+        return cmd_quality_report(args)
 
     return 0
 

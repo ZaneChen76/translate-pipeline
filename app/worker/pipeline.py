@@ -360,8 +360,22 @@ class Pipeline:
         """Run all QA checks."""
         log.info("Running QA checks...")
 
+        target_stats = {
+            "paragraphs": sum(
+                1
+                for u in task.units
+                if u.part == UnitPart.BODY.value and u.translated_text and not u.error
+            ),
+            "tables": None,
+            "table_cells": sum(
+                1
+                for u in task.units
+                if u.part == UnitPart.TABLE.value and u.translated_text and not u.error
+            ),
+        }
+
         task.issues.extend(self.structure_checker.check(
-            task.units, task.stats.get("source", {})
+            task.units, task.stats.get("source", {}), target_stats
         ))
 
         glossary_dict = {e.source_term: e.target_term for e in self.glossary.entries if e.active}

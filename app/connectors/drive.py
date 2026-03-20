@@ -242,7 +242,7 @@ class DriveConnector:
         files = self.list_inbox()
         
         for f in files:
-            if not f.name.lower().endswith((".docx", ".doc")):
+            if not f.name.lower().endswith(".docx"):
                 log.info(f"Skipping non-DOCX: {f.name}")
                 continue
             

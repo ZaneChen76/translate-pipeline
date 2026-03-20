@@ -132,13 +132,18 @@ class DocxWriter:
             run._element.getparent().remove(run._element)
 
     def _replace_cell_text(self, cell, new_text: str):
-        """Replace table cell text, preserving first run's formatting."""
+        """Replace full table-cell text and clear residual content in extra paragraphs."""
+        if not cell.paragraphs:
+            return
+
+        # Clear all paragraph text first to avoid leaving untranslated residue.
         for para in cell.paragraphs:
             if para.runs:
-                first_run = para.runs[0]
-                first_run.text = new_text
+                para.runs[0].text = ""
                 for run in para.runs[1:]:
                     run._element.getparent().remove(run._element)
-                return
-        if cell.paragraphs:
-            cell.paragraphs[0].text = new_text
+            else:
+                para.text = ""
+
+        # Write translated text into the first paragraph (keeps structure intact).
+        self._replace_paragraph_text(cell.paragraphs[0], new_text)

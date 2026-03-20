@@ -33,6 +33,13 @@ python -m app.main translate \
   --input sample.docx \
   --output sample.en.docx \
   --translator mock    # 或 hunyuan (默认)
+
+# 生成质检可视化仪表盘（单源多译文对比）
+python -m app.main quality-report \
+  --source data/inbox/tdra03.docx \
+  --targets "data/output/tdra03.en.*.docx" \
+  --report data/output/tdra03.quality.dashboard.md \
+  --image data/output/tdra03.quality.dashboard.png
 ```
 
 ## 项目结构
