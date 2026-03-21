@@ -108,15 +108,17 @@ def _build_report_text(source_path: str, metrics_list: List[QualityMetrics]) -> 
     lines.append(f"  {_c(BOLD + BRIGHT_CYAN, '▣ Ranking')}")
     lines.append(f"  {_c(GRAY, '─' * width)}")
     lines.append("")
+    # Keep each ranking row comfortably within console width to avoid wraps.
+    # Shorten displayed file names a bit more so the score stays on the same line.
     for idx, m in enumerate(ranked, 1):
-        name = _trim(_mask_filename(m.name), 40)
+        # Use a slightly narrower name column so the score never wraps.
+        name = _trim(_mask_filename(m.name), 34)
         color = _status_color(m.overall)
         idx_part = _c(BRIGHT_WHITE, _pad(str(idx), 2, "right"))
-        name_part = _c(WHITE, _pad(name, 42))
+        name_part = _c(WHITE, _pad(name, 36))
+        # Ensure the numeric score directly follows the bar on the same line.
         val_part = _c(BRIGHT_CYAN, _pad(f"{m.overall:6.2f}", 6, "right"))
-        lines.append(
-            f"  {idx_part}  {name_part}  {_bar(m.overall, 24, color)}  {val_part}"
-        )
+        lines.append(f"  {idx_part}  {name_part}  {_bar(m.overall, 24, color)}  {val_part}")
 
     lines.append("")
     lines.append(f"  {_c(BOLD + BRIGHT_CYAN, '▣ Detail Breakdown')}")
