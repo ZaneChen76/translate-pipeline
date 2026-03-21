@@ -13,6 +13,13 @@ from rich.text import Text as RichText
 
 from .dashboard import QualityMetrics
 
+# Layout widths
+# Keep the internal text width safely below the console width to avoid wraps
+# while rendering ANSI -> SVG. The wider console prevents unintended line
+# breaks for long separator/box lines.
+CONSOLE_WIDTH = 120
+INTERNAL_WIDTH = 110
+
 # ANSI palette aligned with context-doctor style
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -91,7 +98,7 @@ def _append_glossary_line(lines: List[str], label: str, desc: str, total_width: 
 
 def _build_report_text(source_path: str, metrics_list: List[QualityMetrics]) -> str:
     ranked = sorted(metrics_list, key=lambda m: m.overall, reverse=True)
-    width = 86
+    width = INTERNAL_WIDTH
 
     lines = []
     lines.append(f"  {_c(BOLD + BRIGHT_CYAN, '● TranslateDocs Quality Window Breakdown')}  {_c(DIM, '(2026.3.21)')}")
@@ -153,8 +160,9 @@ def _build_report_text(source_path: str, metrics_list: List[QualityMetrics]) -> 
             m.aligned_units, m.nonempty_units, m.total_units, m.number_integrity, m.cjk_residue_ratio
         )
         alerts_text = "alerts: " + (", ".join(m.findings[:2]) if m.findings else "none")
-        lines.append(f"  {_c(GRAY, '│')} {_c(DIM, _trim(unit_line, 78))}")
-        lines.append(f"  {_c(GRAY, '│')} {_c(DIM, _trim(alerts_text, 78))}")
+        inner_text_width = max(20, width - 8)  # align with old (86-8=78) logic
+        lines.append(f"  {_c(GRAY, '│')} {_c(DIM, _trim(unit_line, inner_text_width))}")
+        lines.append(f"  {_c(GRAY, '│')} {_c(DIM, _trim(alerts_text, inner_text_width))}")
         lines.append(f"  {_c(GRAY, '└' + '─' * (width - 2) + '┘')}")
         lines.append("")
 
@@ -186,7 +194,7 @@ def render_dashboard_image(source_path: str, metrics_list: List[QualityMetrics],
     out.parent.mkdir(parents=True, exist_ok=True)
     svg_path = out.with_suffix(".svg")
 
-    console = RichConsole(record=True, width=92, force_terminal=True, file=io.StringIO())
+    console = RichConsole(record=True, width=CONSOLE_WIDTH, force_terminal=True, file=io.StringIO())
     console.print(RichText.from_ansi(text))
     svg = console.export_svg(title="QA Quality Comparison")
     with open(svg_path, "w", encoding="utf-8") as f:
