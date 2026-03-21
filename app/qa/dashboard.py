@@ -147,19 +147,31 @@ def evaluate_pair(source_path: str, target_path: str, glossary: Optional[Glossar
         if _CJK_RE.search(tgt_text):
             cjk_units += 1
 
+        # Continuous scope adherence mapping instead of coarse tiers to improve discrimination
         src_len = max(len(src_text), 1)
         tgt_len = len(tgt_text)
         ratio = tgt_len / float(src_len)
-        if ratio < 0.25:
-            scope_scores.append(35.0)
-        elif ratio < 0.45:
-            scope_scores.append(65.0)
-        elif ratio <= 2.2:
-            scope_scores.append(100.0)
-        elif ratio <= 3.0:
-            scope_scores.append(70.0)
-        else:
-            scope_scores.append(35.0)
+        def scope_score(r: float) -> float:
+            # Ideal band
+            if 0.90 <= r <= 1.30:
+                return 100.0
+            # Slightly short/long: grade down to 70
+            if 0.60 <= r < 0.90:
+                # map 0.60->70 up to 0.90->100
+                return 70.0 + (r - 0.60) * (30.0 / 0.30)
+            if 1.30 < r <= 1.80:
+                # map 1.30->100 down to 1.80->70
+                return 100.0 - (r - 1.30) * (30.0 / 0.50)
+            # Noticeably off: grade to 50
+            if 0.45 <= r < 0.60:
+                # map 0.45->50 up to 0.60->70
+                return 50.0 + (r - 0.45) * (20.0 / 0.15)
+            if 1.80 < r <= 2.50:
+                # map 1.80->70 down to 2.50->50
+                return 70.0 - (r - 1.80) * (20.0 / 0.70)
+            # Far off: fail band
+            return 35.0
+        scope_scores.append(max(35.0, min(100.0, scope_score(ratio))))
 
         if _FORBIDDEN_EXPANSION_RE.search(tgt_text):
             forbidden_hits += 1
@@ -190,8 +202,9 @@ def evaluate_pair(source_path: str, target_path: str, glossary: Optional[Glossar
     completeness = 100.0 * ((aligned / max(total_units, 1)) * 0.7 + (nonempty / max(total_units, 1)) * 0.3)
 
     number_integrity = 100.0 if number_checks == 0 else 100.0 * (number_pass / float(number_checks))
+    # Strengthen sensitivity to untranslated residue: scale faster and allow larger cap
     cjk_ratio = cjk_units / float(max(aligned, 1))
-    cjk_penalty = min(35.0, cjk_ratio * 100.0 * 0.45)
+    cjk_penalty = min(70.0, cjk_ratio * 100.0 * 0.90)
 
     repeat_total = 0
     repeat_stable = 0
@@ -213,7 +226,8 @@ def evaluate_pair(source_path: str, target_path: str, glossary: Optional[Glossar
     scope_adherence = _clamp(scope_adherence - min(30.0, forbidden_hits * 4.0))
 
     professionalism = 100.0
-    professionalism -= min(35.0, forbidden_hits * 6.0)
+    # Heavier penalty for forbidden traces and CJK residue to reflect unusable outputs
+    professionalism -= min(45.0, forbidden_hits * 8.0)
     professionalism -= cjk_penalty
     professionalism = _clamp(professionalism)
 
@@ -221,23 +235,42 @@ def evaluate_pair(source_path: str, target_path: str, glossary: Optional[Glossar
     if glossary_hit_ratio is not None:
         terminology_consistency = (repetition_consistency * 0.55) + (glossary_hit_ratio * 0.45)
 
+    # Slightly rebalance accuracy to emphasize numeric fidelity and scope variance
     accuracy = (
-        number_integrity * 0.38
-        + terminology_consistency * 0.32
-        + scope_adherence * 0.12
-        + (100.0 - cjk_penalty) * 0.18
+        number_integrity * 0.42
+        + terminology_consistency * 0.30
+        + scope_adherence * 0.14
+        + (100.0 - cjk_penalty) * 0.14
     )
     accuracy = _clamp(accuracy)
 
+    # Increase discrimination: lean more on accuracy/scope, less on saturated metrics
     overall = (
-        accuracy * 0.27
-        + completeness * 0.18
-        + structure_fidelity * 0.2
-        + professionalism * 0.13
+        accuracy * 0.36
+        + completeness * 0.12
+        + structure_fidelity * 0.14
+        + professionalism * 0.14
         + terminology_consistency * 0.12
-        + scope_adherence * 0.1
+        + scope_adherence * 0.12
     )
     overall = _clamp(overall)
+
+    # Quality gates: clearly unusable outputs should score much lower.
+    # Apply conservative caps when severe untranslated residue or numeric fidelity issues present.
+    if cjk_ratio >= 0.70:
+        overall = min(overall, 20.0)
+    elif cjk_ratio >= 0.40:
+        overall = min(overall, 35.0)
+    elif cjk_ratio >= 0.20:
+        overall = min(overall, 55.0)
+
+    if number_integrity < 40.0:
+        overall = min(overall, 45.0)
+    elif number_integrity < 60.0:
+        overall = min(overall, 60.0)
+
+    if forbidden_hits >= 3:
+        overall = min(overall, 50.0)
 
     if not paragraph_match:
         findings.append("段落总数不一致，可能存在结构偏移。")
