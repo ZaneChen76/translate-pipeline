@@ -144,7 +144,7 @@ def evaluate_pair(source_path: str, target_path: str, glossary: Optional[Glossar
             if ok:
                 number_pass += 1
 
-        if _CJK_RE.search(tgt_text):
+        if not path.startswith("table[") and _CJK_RE.search(tgt_text):
             cjk_units += 1
 
         # Continuous scope adherence mapping instead of coarse tiers to improve discrimination

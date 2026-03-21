@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Optional
 
 from docx import Document
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
+from docx.oxml.ns import qn
+from lxml import etree
 from docx.document import Document as DocumentType
 from docx.table import Table, _Cell
 from docx.text.paragraph import Paragraph
@@ -87,6 +90,75 @@ class DocxExtractor:
                             style_name=para.style.name if para.style else None,
                         ))
 
+        
+        # Extract text boxes (w:txbxContent)
+        try:
+            root = self.doc._element
+            nsmap = root.nsmap.copy()
+            nsmap.setdefault('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main')
+            txbx_list = root.xpath('.//w:txbxContent', namespaces=nsmap)
+            for tbx_idx, tx in enumerate(txbx_list):
+                paras = tx.xpath('./w:p', namespaces=nsmap)
+                for p_idx, p in enumerate(paras):
+                    text = ''.join(p.xpath('.//w:t/text()', namespaces=nsmap)).strip()
+                    if text:
+                        self.units.append(self._make_unit(
+                            part=UnitPart.TEXTBOX,
+                            path=f"textbox[{tbx_idx}]/p[{p_idx}]",
+                            text=text,
+                            style_name=None,
+                        ))
+        except Exception:
+            pass
+
+        # Extract footnotes and endnotes via relationships
+        try:
+            rels = list(self.doc.part.rels.values())
+            # Footnotes
+            for rel in rels:
+                if rel.reltype == RT.FOOTNOTES and hasattr(rel, 'target_part'):
+                    part = rel.target_part
+                    el = part.element
+                    nsmap = el.nsmap.copy()
+                    nsmap.setdefault('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main')
+                    for fn in el.xpath('./w:footnote', namespaces=nsmap):
+                        fid = fn.get(qn('w:id'))
+                        if fid in ('-1', '0'):
+                            continue
+                        paras = fn.xpath('./w:p', namespaces=nsmap)
+                        for p_idx, p in enumerate(paras):
+                            text = ''.join(p.xpath('.//w:t/text()', namespaces=nsmap)).strip()
+                            if text:
+                                self.units.append(self._make_unit(
+                                    part=UnitPart.FOOTNOTE,
+                                    path=f"footnote[{fid}]/p[{p_idx}]",
+                                    text=text,
+                                    style_name=None,
+                                ))
+            # Endnotes
+            for rel in rels:
+                if rel.reltype == RT.ENDNOTES and hasattr(rel, 'target_part'):
+                    part = rel.target_part
+                    el = part.element
+                    nsmap = el.nsmap.copy()
+                    nsmap.setdefault('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main')
+                    for en in el.xpath('./w:endnote', namespaces=nsmap):
+                        eid = en.get(qn('w:id'))
+                        if eid in ('-1', '0'):
+                            continue
+                        paras = en.xpath('./w:p', namespaces=nsmap)
+                        for p_idx, p in enumerate(paras):
+                            text = ''.join(p.xpath('.//w:t/text()', namespaces=nsmap)).strip()
+                            if text:
+                                self.units.append(self._make_unit(
+                                    part=UnitPart.ENDNOTE,
+                                    path=f"endnote[{eid}]/p[{p_idx}]",
+                                    text=text,
+                                    style_name=None,
+                                ))
+        except Exception:
+            pass
+        
         # Add context (preceding/following unit)
         for i, unit in enumerate(self.units):
             if i > 0:

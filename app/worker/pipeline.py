@@ -31,7 +31,7 @@ class Pipeline:
         self.config = config
         self.translator: Translator | None = None
         self.glossary = Glossary()
-        self.tm = TranslationMemory(config.tm_dir)
+        self.tm = TranslationMemory(config.tm_dir, similarity_threshold=getattr(config, "tm_similarity_threshold", 0.85))
         self.structure_checker = StructureChecker()
         self.number_checker = NumberChecker()
         self.term_checker = TermChecker()
@@ -194,10 +194,13 @@ class Pipeline:
                 continue
 
             # Check TM
-            tm_entry = self.tm.lookup(unit.source_text)
-            if tm_entry:
+            tm_res = self.tm.lookup(unit.source_text)
+            if tm_res:
+                tm_entry, sim, mtype = tm_res
                 unit.translated_text = tm_entry.target_text
                 unit.tm_hit = True
+                unit.tm_match_type = mtype
+                unit.tm_similarity = round(sim, 3)
                 unit.error = None
                 tm_hits += 1
                 translated += 1
@@ -299,6 +302,8 @@ class Pipeline:
                     "context_after": u.context_after,
                     "term_hits": u.term_hits,
                     "tm_hit": u.tm_hit,
+                    "tm_match_type": u.tm_match_type,
+                    "tm_similarity": u.tm_similarity,
                     "error": u.error,
                 }
                 for u in task.units
@@ -345,6 +350,8 @@ class Pipeline:
                     context_after=ud.get("context_after"),
                     term_hits=ud.get("term_hits", []),
                     tm_hit=ud.get("tm_hit", False),
+                    tm_match_type=ud.get("tm_match_type"),
+                    tm_similarity=ud.get("tm_similarity"),
                     error=ud.get("error"),
                 )
                 task.units.append(unit)

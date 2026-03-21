@@ -5,6 +5,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 import uuid
+import typing
 
 
 class TaskStatus(str, Enum):
@@ -24,6 +25,7 @@ class UnitPart(str, Enum):
     TABLE = "table"
     TEXTBOX = "textbox"
     FOOTNOTE = "footnote"
+    ENDNOTE = "endnote"
 
 
 @dataclass
@@ -39,6 +41,8 @@ class TranslationUnit:
     context_after: Optional[str] = None
     term_hits: list[str] = field(default_factory=list)
     tm_hit: bool = False
+    tm_match_type: typing.Optional[str] = None
+    tm_similarity: typing.Optional[float] = None
     error: Optional[str] = None
 
     @property

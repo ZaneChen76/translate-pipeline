@@ -32,6 +32,8 @@ class Config:
 
     # QA
     qa_enabled: bool = True
+    tm_similarity_threshold: float = 0.85
+    qa_weights: dict | None = None
 
     def __post_init__(self):
         # Normalize YAML-loaded string paths
@@ -59,6 +61,17 @@ class Config:
         for d in [self.glossary_dir, self.tm_dir, self.output_dir, self.jobs_dir]:
             d.mkdir(parents=True, exist_ok=True)
 
+
+        # Other overrides from env (if provided)
+        tr_env = os.environ.get('TRANSLATE_PIPELINE_TRANSLATOR')
+        if tr_env:
+            self.translator = tr_env
+        tmt = os.environ.get('TM_SIMILARITY_THRESHOLD') or os.environ.get('TRANSLATE_PIPELINE_TM_THRESHOLD')
+        if tmt:
+            try:
+                self.tm_similarity_threshold = float(tmt)
+            except ValueError:
+                pass
         # API key from env
         if not self.hunyuan_api_key:
             self.hunyuan_api_key = os.environ.get("HUNYUAN_API_KEY", "")

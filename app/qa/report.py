@@ -30,7 +30,7 @@ def generate_report(task: Task, output_path: str) -> str:
         f.write(f"| Translated | {sum(1 for u in task.units if u.translated_text and not u.error)} |\n")
         f.write(f"| Errors (QA) | {len(errors)} |\n")
         f.write(f"| Warnings (QA) | {len(warnings)} |\n")
-        f.write(f"| TM Hits | {sum(1 for u in task.units if u.tm_hit)} |\n")
+        f.write(f"| TM Matches | {sum(1 for u in task.units if u.tm_hit)} |\n")
 
         if task.stats:
             f.write(f"\n**Source Stats**: {task.stats.get('source', {})}\n")
@@ -65,7 +65,9 @@ def generate_report(task: Task, output_path: str) -> str:
             f.write(f"**Source**:\n```\n{u.source_text[:300]}\n```\n\n")
             f.write(f"**Target**:\n```\n{(u.translated_text or '')[:500]}\n```\n\n")
             if u.tm_hit:
-                f.write("*TM exact match*\n\n")
+                info = 'exact' if (u.tm_match_type in (None, 'exact')) else u.tm_match_type
+                sim = (f"{u.tm_similarity:.2f}" if u.tm_similarity is not None else '1.00')
+                f.write(f"*TM {info} match (sim={sim})*\n\n")
             f.write("---\n\n")
 
     log.info(f"QA report written to: {output.name}")

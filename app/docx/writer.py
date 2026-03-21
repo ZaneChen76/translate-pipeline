@@ -6,6 +6,8 @@ import shutil
 from pathlib import Path
 
 from docx import Document
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
+from docx.oxml.ns import qn
 
 from ..core import TranslationUnit, UnitPart
 from ..core.config import log
@@ -15,7 +17,33 @@ _HEADER_RE = re.compile(r"^header\[s(\d+)\]/p\[(\d+)\]$")
 _FOOTER_RE = re.compile(r"^footer\[s(\d+)\]/p\[(\d+)\]$")
 _BODY_RE = re.compile(r"^body/p\[(\d+)\]$")
 _TABLE_RE = re.compile(r"^table\[(\d+)\]/cell\[(\d+),(\d+)\]$")
+_TEXTBOX_RE = re.compile(r"^textbox\[(\d+)\]/p\[(\d+)\]$")
+_FOOTNOTE_RE = re.compile(r"^footnote\[(\-?\d+)\]/p\[(\d+)\]$")
+_ENDNOTE_RE = re.compile(r"^endnote\[(\-?\d+)\]/p\[(\d+)\]$")
 
+
+
+def _replace_w_p_text(p_el, new_text: str):
+    """Replace text inside a w:p element, preserving first run properties."""
+    from lxml import etree
+    nsmap = p_el.nsmap.copy()
+    nsmap.setdefault('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main')
+    runs = p_el.xpath('./w:r', namespaces=nsmap)
+    if not runs:
+        r = etree.SubElement(p_el, qn('w:r'))
+        t = etree.SubElement(r, qn('w:t'))
+        t.text = new_text
+        return
+    t_nodes = runs[0].xpath('.//w:t', namespaces=nsmap)
+    if t_nodes:
+        t_nodes[0].text = new_text
+    else:
+        t = etree.SubElement(runs[0], qn('w:t'))
+        t.text = new_text
+    for r in runs[1:]:
+        parent = r.getparent()
+        if parent is not None:
+            parent.remove(r)
 
 class DocxWriter:
     """Writes translated units back into a DOCX file, preserving structure."""
@@ -90,6 +118,7 @@ class DocxWriter:
                     skipped += 1
                 continue
 
+
             m = _TABLE_RE.match(unit.path)
             if m:
                 t_idx, r_idx, c_idx = int(m.group(1)), int(m.group(2)), int(m.group(3))
@@ -103,6 +132,88 @@ class DocxWriter:
                         skipped += 1
                 else:
                     log.warning(f"Table index {t_idx} out of range (path={unit.path})")
+                    skipped += 1
+                continue
+
+            m = _TEXTBOX_RE.match(unit.path)
+            if m:
+                tbx_idx, p_idx = int(m.group(1)), int(m.group(2))
+                try:
+                    root = doc._element
+                    nsmap = root.nsmap.copy()
+                    nsmap.setdefault('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main')
+                    txbx_list = root.xpath('.//w:txbxContent', namespaces=nsmap)
+                    if tbx_idx < len(txbx_list):
+                        paras = txbx_list[tbx_idx].xpath('./w:p', namespaces=nsmap)
+                        if p_idx < len(paras):
+                            _replace_w_p_text(paras[p_idx], unit.translated_text)
+                            written += 1
+                        else:
+                            log.warning(f"Textbox para index {p_idx} out of range (path={unit.path})")
+                            skipped += 1
+                    else:
+                        log.warning(f"Textbox index {tbx_idx} out of range (path={unit.path})")
+                        skipped += 1
+                except Exception as e:
+                    log.warning(f"Textbox write failed for {unit.path}: {e}")
+                    skipped += 1
+                continue
+
+            m = _FOOTNOTE_RE.match(unit.path)
+            if m:
+                fid, p_idx = m.group(1), int(m.group(2))
+                try:
+                    part = next((rel.target_part for rel in doc.part.rels.values() if rel.reltype == RT.FOOTNOTES), None)
+                    if part is not None:
+                        el = part.element
+                        nsmap = el.nsmap.copy()
+                        nsmap.setdefault('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main')
+                        fns = el.xpath("./w:footnote[@w:id='" + str(fid) + "']", namespaces=nsmap)
+                        if fns:
+                            paras = fns[0].xpath('./w:p', namespaces=nsmap)
+                            if p_idx < len(paras):
+                                _replace_w_p_text(paras[p_idx], unit.translated_text)
+                                written += 1
+                            else:
+                                log.warning(f"Footnote para index {p_idx} out of range (path={unit.path})")
+                                skipped += 1
+                        else:
+                            log.warning(f"Footnote id {fid} not found (path={unit.path})")
+                            skipped += 1
+                    else:
+                        log.warning('No footnotes part present')
+                        skipped += 1
+                except Exception as e:
+                    log.warning(f"Footnote write failed for {unit.path}: {e}")
+                    skipped += 1
+                continue
+
+            m = _ENDNOTE_RE.match(unit.path)
+            if m:
+                eid, p_idx = m.group(1), int(m.group(2))
+                try:
+                    part = next((rel.target_part for rel in doc.part.rels.values() if rel.reltype == RT.ENDNOTES), None)
+                    if part is not None:
+                        el = part.element
+                        nsmap = el.nsmap.copy()
+                        nsmap.setdefault('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main')
+                        ens = el.xpath("./w:endnote[@w:id='" + str(eid) + "']", namespaces=nsmap)
+                        if ens:
+                            paras = ens[0].xpath('./w:p', namespaces=nsmap)
+                            if p_idx < len(paras):
+                                _replace_w_p_text(paras[p_idx], unit.translated_text)
+                                written += 1
+                            else:
+                                log.warning(f"Endnote para index {p_idx} out of range (path={unit.path})")
+                                skipped += 1
+                        else:
+                            log.warning(f"Endnote id {eid} not found (path={unit.path})")
+                            skipped += 1
+                    else:
+                        log.warning('No endnotes part present')
+                        skipped += 1
+                except Exception as e:
+                    log.warning(f"Endnote write failed for {unit.path}: {e}")
                     skipped += 1
                 continue
 

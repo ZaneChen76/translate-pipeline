@@ -13,7 +13,12 @@ from .worker.pipeline import Pipeline
 
 def cmd_translate(args):
     """Execute translation pipeline."""
-    config = Config()
+    # Load default config if available
+    default_cfg_path = (Config().data_dir / "config" / "default.yaml")
+    if default_cfg_path.exists():
+        config = Config.from_yaml(str(default_cfg_path))
+    else:
+        config = Config()
     if args.config:
         config = Config.from_yaml(args.config)
 
@@ -96,7 +101,7 @@ def cmd_quality_report(args):
     return 0
 
 
-def main():
+def build_parser():
     parser = argparse.ArgumentParser(
         prog="translate_pipeline",
         description="TranslateDocs - 技术文档/标书中译英保真翻译系统",
@@ -137,6 +142,11 @@ def main():
     p_quality.add_argument("--image", help="Write dashboard to PNG image")
     p_quality.add_argument("--verbose", "-v", action="store_true", help="Verbose logging")
 
+    return parser
+
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
 
     if not args.command:
