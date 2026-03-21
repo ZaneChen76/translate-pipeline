@@ -246,12 +246,12 @@ def evaluate_pair(source_path: str, target_path: str, glossary: Optional[Glossar
 
     # Increase discrimination: lean more on accuracy/scope, less on saturated metrics
     overall = (
-        accuracy * 0.36
-        + completeness * 0.12
-        + structure_fidelity * 0.14
+        accuracy * 0.40
+        + completeness * 0.08
+        + structure_fidelity * 0.12
         + professionalism * 0.14
         + terminology_consistency * 0.12
-        + scope_adherence * 0.12
+        + scope_adherence * 0.14
     )
     overall = _clamp(overall)
 
