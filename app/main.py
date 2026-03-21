@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from .core.config import Config, setup_logging, log
-from .qa.dashboard import generate_quality_dashboard
+from .qa.dashboard import generate_quality_dashboard, render_dashboard
 from .qa.dashboard_image import render_dashboard_image
 from .worker.pipeline import Pipeline
 
@@ -72,33 +72,52 @@ def cmd_translate(args):
 
 def cmd_quality_report(args):
     source_path = args.source
-    targets = args.targets or []
+    target_patterns = args.targets or []
     report_path = args.report or ""
 
-    report_or_text, metrics = generate_quality_dashboard(
+    # Generate metrics without writing report first
+    _dashboard_text, metrics = generate_quality_dashboard(
         source_path=source_path,
-        target_patterns=targets,
+        target_patterns=target_patterns,
         output_dir=args.output_dir,
-        report_path=report_path,
+        report_path="",  # we will write our own report after filtering
         glossary_path=args.glossary or "",
     )
 
-    if report_path:
-        print(f"Dashboard Report: {report_or_text}")
-    else:
-        print(report_or_text)
+    # Exclude specific model from comparison
+    excluded_name = 'tdra03.en.Qwen2.5-32B-Instruct.docx'
+    filtered = [m for m in (metrics or []) if m.name != excluded_name]
+    if not filtered:
+        print('No candidates after exclusion; nothing to compare.')
+        return 1
 
-    if metrics:
-        winner = sorted(metrics, key=lambda m: m.overall, reverse=True)[0]
+    # Render dashboard text from filtered metrics
+    dashboard_text = render_dashboard(source_path, filtered)
+
+    if report_path:
+        out = Path(report_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with open(out, 'w') as f:
+            f.write('# Translation QA Dashboard\n\n')
+            f.write('```text\n')
+            f.write(dashboard_text)
+            f.write('```\n')
+        print(f"Dashboard Report: {out}")
+    else:
+        print(dashboard_text)
+
+    if filtered:
+        winner = sorted(filtered, key=lambda m: m.overall, reverse=True)[0]
         print(
             f"Best Candidate: {winner.name} | overall={winner.overall:.2f} | "
             f"accuracy={winner.accuracy:.2f} | structure={winner.structure_fidelity:.2f}"
         )
 
     if args.image:
-        image_path = render_dashboard_image(source_path, metrics, args.image)
+        image_path = render_dashboard_image(source_path, filtered, args.image)
         print(f"Dashboard Image: {image_path}")
     return 0
+
 
 
 def build_parser():

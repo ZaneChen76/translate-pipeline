@@ -16,9 +16,9 @@ from .dashboard import QualityMetrics
 # Layout widths
 # Keep the internal text width safely below the console width to avoid wraps
 # while rendering ANSI -> SVG. The wider console prevents unintended line
-# breaks for long separator/box lines.
-CONSOLE_WIDTH = 80
-INTERNAL_WIDTH = 70
+# breaks for long separator/box lines. CONSOLE_WIDTH=85, INTERNAL_WIDTH=75
+CONSOLE_WIDTH = 85
+INTERNAL_WIDTH = 75
 
 # ANSI palette aligned with context-doctor style
 RESET = "\033[0m"
@@ -160,9 +160,13 @@ def _build_report_text(source_path: str, metrics_list: List[QualityMetrics]) -> 
             m.aligned_units, m.nonempty_units, m.total_units, m.number_integrity, m.cjk_residue_ratio
         )
         alerts_text = "alerts: " + (", ".join(m.findings[:2]) if m.findings else "none")
-        inner_text_width = max(20, width - 8)  # keep text within box (70-8=62)
-        lines.append(f"  {_c(GRAY, '│')} {_c(DIM, _trim(unit_line, inner_text_width))}")
-        lines.append(f"  {_c(GRAY, '│')} {_c(DIM, _trim(alerts_text, inner_text_width))}")
+        inner_text_width = width - 8  # keep text within box (75-8=67)
+        # Wrap unit stats line
+        for ln in (textwrap.wrap(unit_line, width=inner_text_width, break_long_words=False, break_on_hyphens=False) or [""]):
+            lines.append(f"  {_c(GRAY, '│')} {_c(DIM, ln)}")
+        # Wrap alerts details
+        for ln in (textwrap.wrap(alerts_text, width=inner_text_width, break_long_words=False, break_on_hyphens=False) or [""]):
+            lines.append(f"  {_c(GRAY, '│')} {_c(DIM, ln)}")
         lines.append(f"  {_c(GRAY, '└' + '─' * (width - 2) + '┘')}")
         lines.append("")
 
