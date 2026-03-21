@@ -5,6 +5,7 @@ import os
 import subprocess
 from pathlib import Path
 import io
+import textwrap
 from typing import Callable, List
 
 from rich.console import Console as RichConsole
@@ -79,6 +80,15 @@ def _bar(value: float, width: int = 36, color: str = GREEN) -> str:
     return _c(color, "█" * filled) + _c(GRAY, "░" * empty)
 
 
+def _append_glossary_line(lines: List[str], label: str, desc: str, total_width: int, label_width: int = 14) -> None:
+    line_prefix_width = 2 + label_width + 1
+    desc_width = max(20, total_width - line_prefix_width)
+    wrapped = textwrap.wrap(desc, width=desc_width, break_long_words=False, break_on_hyphens=False) or [""]
+    lines.append(f"  {_c(DIM, _pad(label, label_width))} {_c(WHITE, wrapped[0])}")
+    for cont in wrapped[1:]:
+        lines.append(f"  {_c(DIM, ' ' * label_width)} {_c(WHITE, cont)}")
+
+
 def _build_report_text(source_path: str, metrics_list: List[QualityMetrics]) -> str:
     ranked = sorted(metrics_list, key=lambda m: m.overall, reverse=True)
     width = 86
@@ -149,42 +159,20 @@ def _build_report_text(source_path: str, metrics_list: List[QualityMetrics]) -> 
     lines.append(f"  {_c(BOLD + BRIGHT_CYAN, '▣ Metrics Glossary')}")
     lines.append(f"  {_c(GRAY, '─' * width)}")
     lines.append("")
-    lines.append(
-        f"  {_c(DIM, _pad('Accuracy', 14))} {_c(WHITE, '0.38*N + 0.32*T + 0.12*Scope + 0.18*(100-CJK_penalty)')}"
-    )
-    lines.append(
-        f"  {_c(DIM, _pad('Completeness', 14))} {_c(WHITE, '100 * (0.7*aligned_ratio + 0.3*nonempty_ratio)')}"
-    )
-    lines.append(
-        f"  {_c(DIM, _pad('Structure', 14))} {_c(WHITE, '50% struct checks(paragraph/table/cell) + 50% path alignment')}"
-    )
-    lines.append(
-        f"  {_c(DIM, _pad('Professional', 14))} {_c(WHITE, '100 - min(35, forbidden_hits*6) - CJK_penalty')}"
-    )
-    lines.append(
-        f"  {_c(DIM, _pad('Terminology', 14))} {_c(WHITE, 'rep_consistency; with glossary: 0.55*rep + 0.45*glossary_hit')}"
-    )
-    lines.append(
-        f"  {_c(DIM, _pad('Scope', 14))} {_c(WHITE, 'length-ratio tiers, then minus min(30, forbidden_hits*4)')}"
-    )
-    lines.append(
-        f"  {_c(DIM, _pad('Overall', 14))} {_c(WHITE, '0.27*A + 0.18*C + 0.20*S + 0.13*P + 0.12*T + 0.10*Scope')}"
-    )
+    _append_glossary_line(lines, "Accuracy", "0.38*N + 0.32*T + 0.12*Scope + 0.18*(100-CJK_penalty)", width)
+    _append_glossary_line(lines, "Completeness", "100 * (0.7*aligned_ratio + 0.3*nonempty_ratio)", width)
+    _append_glossary_line(lines, "Structure", "50% struct checks(paragraph/table/cell) + 50% path alignment", width)
+    _append_glossary_line(lines, "Professional", "100 - min(35, forbidden_hits*6) - CJK_penalty", width)
+    _append_glossary_line(lines, "Terminology", "rep_consistency; with glossary: 0.55*rep + 0.45*glossary_hit", width)
+    _append_glossary_line(lines, "Scope", "length-ratio tiers, then minus min(30, forbidden_hits*4)", width)
+    _append_glossary_line(lines, "Overall", "0.27*A + 0.18*C + 0.20*S + 0.13*P + 0.12*T + 0.10*Scope", width)
     lines.append("")
-    lines.append(
-        f"  {_c(DIM, _pad('N', 14))} {_c(WHITE, 'number_integrity: source numbers preserved in target (100 = all matched)')}"
-    )
-    lines.append(
-        f"  {_c(DIM, _pad('T', 14))} {_c(WHITE, 'terminology_consistency: repetition consistency, blended with glossary hit ratio')}"
-    )
-    lines.append(
-        f"  {_c(DIM, _pad('CJK_penalty', 14))} {_c(WHITE, 'min(35, cjk_ratio*100*0.45), where cjk_ratio = cjk_units/aligned_units')}"
-    )
-    lines.append(
-        f"  {_c(DIM, _pad('A/C/S/P', 14))} {_c(WHITE, 'A=Accuracy, C=Completeness, S=Structure, P=Professionalism')}"
-    )
+    _append_glossary_line(lines, "N", "number_integrity: source numbers preserved in target (100 = all matched)", width)
+    _append_glossary_line(lines, "T", "terminology_consistency: repetition consistency, blended with glossary hit ratio", width)
+    _append_glossary_line(lines, "CJK_penalty", "min(35, cjk_ratio*100*0.45), where cjk_ratio = cjk_units/aligned_units", width)
+    _append_glossary_line(lines, "A/C/S/P", "A=Accuracy, C=Completeness, S=Structure, P=Professionalism", width)
     lines.append("")
-    lines.append(f"  {_c(DIM, 'translate-pipeline • context-doctor-style renderer')}")
+    lines.append(f"  {_c(DIM, 'translate-pipeline • terminal-style renderer')}")
     lines.append("")
     return "\n".join(lines)
 
