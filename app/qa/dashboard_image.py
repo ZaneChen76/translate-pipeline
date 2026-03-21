@@ -171,6 +171,19 @@ def _build_report_text(source_path: str, metrics_list: List[QualityMetrics]) -> 
         f"  {_c(DIM, _pad('Overall', 14))} {_c(WHITE, '0.27*A + 0.18*C + 0.20*S + 0.13*P + 0.12*T + 0.10*Scope')}"
     )
     lines.append("")
+    lines.append(
+        f"  {_c(DIM, _pad('N', 14))} {_c(WHITE, 'number_integrity: source numbers preserved in target (100 = all matched)')}"
+    )
+    lines.append(
+        f"  {_c(DIM, _pad('T', 14))} {_c(WHITE, 'terminology_consistency: repetition consistency, blended with glossary hit ratio')}"
+    )
+    lines.append(
+        f"  {_c(DIM, _pad('CJK_penalty', 14))} {_c(WHITE, 'min(35, cjk_ratio*100*0.45), where cjk_ratio = cjk_units/aligned_units')}"
+    )
+    lines.append(
+        f"  {_c(DIM, _pad('A/C/S/P', 14))} {_c(WHITE, 'A=Accuracy, C=Completeness, S=Structure, P=Professionalism')}"
+    )
+    lines.append("")
     lines.append(f"  {_c(DIM, 'translate-pipeline • context-doctor-style renderer')}")
     lines.append("")
     return "\n".join(lines)
@@ -185,7 +198,7 @@ def render_dashboard_image(source_path: str, metrics_list: List[QualityMetrics],
 
     console = RichConsole(record=True, width=92, force_terminal=True, file=io.StringIO())
     console.print(RichText.from_ansi(text))
-    svg = console.export_svg(title="context-doctor")
+    svg = console.export_svg(title="QA Quality Comparison")
     with open(svg_path, "w", encoding="utf-8") as f:
         f.write(svg)
 
