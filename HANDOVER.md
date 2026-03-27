@@ -438,7 +438,7 @@ sessions_spawn(
 
 步骤：
 1. 用 exec background=true 运行：
-   cd ~/.openclaw/workspace/projects/translate-docs/translate_pipeline && HUNYUAN_API_KEY="HUNYUAN_API_KEY_REMOVED" python3 drive_translate.py
+   cd ~/.openclaw/workspace/projects/translate-docs/translate_pipeline && HUNYUAN_API_KEY="$HUNYUAN_API_KEY" python3 drive_translate.py
 
 2. 用 process poll 轮询等待完成（timeout 1800000ms）
 
